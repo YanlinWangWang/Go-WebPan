@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"../meta"
+	"../util"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil" //IO读取单元
 	"net/http"
 	"os"
+	"time"
 )
 
 // UploadHandler ： 处理文件上传
@@ -31,8 +35,14 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		defer file.Close()//类似与堆栈 代表在执行前肯定关闭文件
 
+		fileMeta := meta.FileMeta{
+			FileName: head.Filename,
+			Location: "/tmp/" + head.Filename,
+			UploadAt: time.Now().Format("2006-01-02 15:04:05"),
+		}
+
 		//创造新的文件
-		newFile, err := os.Create("/tmp/"+head.Filename)//注意os直接向系统根目录写入东西 /tmp文件夹在系统目录下 与/home文件夹平级
+		newFile, err := os.Create(fileMeta.Location)//注意os直接向系统根目录写入东西 /tmp文件夹在系统目录下 与/home文件夹平级
 		if err != nil {
 			fmt.Printf("无法创建文件, err:%s\n", err.Error())
 			return
@@ -40,11 +50,17 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		defer newFile.Close()
 
 		//拷贝文件
-		_, err = io.Copy(newFile, file)
+		fileMeta.FileSize, err = io.Copy(newFile, file)
 		if err != nil {
 			fmt.Printf("文件拷贝失败, err:%s\n", err.Error())
 			return
 		}
+
+		//从远点开始
+		newFile.Seek(0,0)
+		fileMeta.FileSha1 = util.FileSha1(newFile)//更新hash
+
+		meta.UpdateFileMeta(fileMeta)
 
 		//重定向至陈宫页面
 		http.Redirect(w,r,"/file/upload/success",http.StatusFound)//htttp302代表重定向
@@ -54,4 +70,47 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 // UploadSucHandler : 上传已完成
 func UploadSucHandler(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "上传成功！")
+}
+
+//获取文件上传接口
+func GetFileMetaHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	filehash := r.Form["filehash"][0]
+	fMeta := meta.GetFileMeta(filehash)
+
+	//转化为json格式
+	data, err := json.Marshal(fMeta)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(data)
+
+}
+
+//文件下载接口
+// DownloadHandler : 文件下载接口
+func DownloadHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	fsha1 := r.Form.Get("filehash")
+	fm := meta.GetFileMeta(fsha1)
+
+	f, err := os.Open(fm.Location)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octect-stream")
+	// attachment表示文件将会提示下载到本地，而不是直接在浏览器中打开
+	w.Header().Set("content-disposition", "attachment; filename=\""+fm.FileName+"\"")
+	w.Write(data)
 }
