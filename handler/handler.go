@@ -60,7 +60,8 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		newFile.Seek(0,0)
 		fileMeta.FileSha1 = util.FileSha1(newFile)//更新hash
 
-		meta.UpdateFileMeta(fileMeta)
+		//向数据库里添加数据
+		meta.UpdateFileMetaDB(fileMeta)
 
 		//重定向至陈宫页面
 		http.Redirect(w,r,"/file/upload/success",http.StatusFound)//htttp302代表重定向
@@ -72,7 +73,7 @@ func UploadSucHandler(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "上传成功！")
 }
 
-//获取文件上传接口
+//获取文件上传信息接口
 func GetFileMetaHandler(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
@@ -162,3 +163,4 @@ func FileDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 }
+

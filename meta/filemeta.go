@@ -1,5 +1,8 @@
 package meta
 
+import(
+	mydb "../db"
+)
 // FileMeta : 文件元信息结构
 type FileMeta struct {
 	FileSha1 string
@@ -31,3 +34,10 @@ func GetFileMeta(fileSha1 string) FileMeta {
 func RemoveFileMeta(fileSha1 string) {
 	delete(fileMetas, fileSha1)//从map中删除对象
 }
+
+// UpdateFileMetaDB : 新增/更新文件元信息到mysql中
+func UpdateFileMetaDB(fmeta FileMeta) bool {
+	return mydb.OnFileUploadFinished(
+		fmeta.FileSha1, fmeta.FileName, fmeta.FileSize, fmeta.Location)
+}
+
